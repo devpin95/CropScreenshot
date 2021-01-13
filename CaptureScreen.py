@@ -6,6 +6,7 @@ from io import BytesIO
 from filelock import FileLock
 import json
 from datetime import datetime
+from win10toast import ToastNotifier
 
 NUM_MONITORS = 3
 active_monitor = 1
@@ -31,26 +32,33 @@ def send_to_clipboard(clip_type, data):
 
 def set_active_monitor(mid):
     global active_monitor
+    global CONFIG_DICT
+
+    get_config()
+
     active_monitor = int(mid)
     print('monitor {} is now active'.format(active_monitor))
+    if CONFIG_DICT['show_toast_on_monitor_change']:
+        toaster = ToastNotifier()
+        toaster.show_toast("PowerSS", 'monitor {} is now active'.format(active_monitor), duration=2, threaded=True)
 
 
 def on_trigger():
 
     get_config()
 
-    print(CONFIG_DICT)
-
     with mss.mss() as scr:
-        print("Taking sss")
+        toast_str = ''
         scr_img = scr.grab(scr.monitors[active_monitor])
 
         img = Image.frombytes("RGB", scr_img.size, scr_img.bgra, "raw", "BGRX")
 
+        now = datetime.now().strftime("%m%d%Y%H%M%S")
         if CONFIG_DICT['save_ss']:
-            path = '{}/{}-screenshot.png'.format(CONFIG_DICT['ss_path'], datetime.now().strftime("%m%d%Y-%H%M%S"))
+            path = '{}/{}screenshot.png'.format(CONFIG_DICT['ss_path'], now)
             print("PATH", path)
             img.save(path)
+            toast_str += '{}-screenshot.png saved!'.format(now)
 
         output = BytesIO()
         img.save(output, "BMP")
@@ -59,6 +67,11 @@ def on_trigger():
 
         if CONFIG_DICT['copy_2_cb']:
             send_to_clipboard(cb.CF_DIB, data)
+            toast_str = 'Copied to Clipboard\n' + toast_str
+
+        if CONFIG_DICT['show_toast_on_capture']:
+            toaster = ToastNotifier()
+            toaster.show_toast("PowerSS", toast_str, duration=5, threaded=True)
 
 switch_screen_shortcuts = ['ctrl+alt+' + str(i) for i in range(0, NUM_MONITORS)]
 for sc in switch_screen_shortcuts:
