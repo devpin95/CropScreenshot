@@ -71,7 +71,7 @@ def on_trigger():
 
         if CONFIG_DICT['show_toast_on_capture']:
             toaster = ToastNotifier()
-            toaster.show_toast("PowerSS", toast_str, duration=5, threaded=True)
+            toaster.show_toast("PowerSS", toast_str, duration=5, threaded=True, icon_path='assets\icon-pink-256x256.ico')
 
 switch_screen_shortcuts = ['ctrl+alt+' + str(i) for i in range(0, NUM_MONITORS)]
 for sc in switch_screen_shortcuts:
