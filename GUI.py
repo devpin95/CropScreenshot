@@ -49,7 +49,7 @@ class Window(QMainWindow):
 
         # self.setStyleSheet("padding: 5px 10px 5px 10px")
         self.setFixedWidth(525)
-        self.setFixedHeight(700)
+        self.setFixedHeight(800)
         self.setWindowTitle(WINDOW_TITLE)
 
         # self.setWindowIcon(app_icon)
@@ -59,7 +59,36 @@ class Window(QMainWindow):
         main_layout = QVBoxLayout()
         self.main_widget = QWidget(self)
         self.main_widget.setFixedWidth(525)
-        self.main_widget.setFixedHeight(700)
+        self.main_widget.setFixedHeight(800)
+
+        self.g_instructions = QWidget(self)
+        self.g_instructions.setFixedWidth(500)
+        self.g_instructions.setFixedHeight(100)
+        self.g_instructions.setStyleSheet('border: 1px solid #000;'
+                                          'border-radius: 2px')
+
+        g_instructions_layout = QVBoxLayout()
+
+        self.g_instructions_title = QLabel('How to use PowerSS:')
+        instructions_title_fontt = QFont('Arial', 10)
+        instructions_title_fontt.setBold(True)
+        self.g_instructions_title.setFont(instructions_title_fontt)
+        self.g_instructions_title.setStyleSheet('border: none;')
+        g_instructions_layout.addWidget(self.g_instructions_title)
+
+        # To see which monitor is which, test the preview below
+        self.g_instructions_hotkeys = QLabel('ctrl+alt+[monitor number] - Set active monitor\nctrl+alt+s - Take screenshot')
+        self.g_instructions_hotkeys.setFont(QFont('Arial', 10))
+        self.g_instructions_hotkeys.setStyleSheet('border: none;')
+        g_instructions_layout.addWidget(self.g_instructions_hotkeys)
+
+        self.g_instructions_preview = QLabel('To see which monitor is which, test the preview below')
+        self.g_instructions_preview.setFont(QFont('Arial', 10))
+        self.g_instructions_preview.setStyleSheet('border: none;')
+        g_instructions_layout.addWidget(self.g_instructions_preview)
+
+        g_instructions_layout.addStretch()
+        self.g_instructions.setLayout(g_instructions_layout)
 
         self.g_settings = QWidget(self)
         self.g_settings.setFixedWidth(500)
@@ -73,6 +102,9 @@ class Window(QMainWindow):
         self.g_settings_save_file_cb.setStyleSheet("border: none;")
         self.g_settings_save_file_cb.stateChanged.connect(self.cb_save_file_state_changed)
         # Checked after we create the path widget
+
+        if CONFIG_DICT['ss_path'] == '':
+            self.init_save_path()
 
         self.g_settings_save_file_path = QLabel("Path: {}".format(CONFIG_DICT['ss_path']), self)
         self.g_settings_save_file_path.setFixedHeight(30)
@@ -125,7 +157,8 @@ class Window(QMainWindow):
         self.g_preview.setFixedWidth(500)
         self.g_preview.setStyleSheet('border-radius: 3px')
 
-        self.preview_label = QLabel("Monitors")
+        self.preview_label = QLabel("Preview Monitors")
+        self.preview_label.setFont(instructions_title_fontt)
         preview_layout.addWidget(self.preview_label)
 
         monitor_layout = QHBoxLayout()
@@ -157,8 +190,10 @@ class Window(QMainWindow):
 
         self.g_preview.setLayout(preview_layout)
 
+        main_layout.addWidget(self.g_instructions)
         main_layout.addWidget(self.g_settings)
         main_layout.addWidget(self.g_preview)
+        main_layout.addStretch()
         self.main_widget.setLayout(main_layout)
 
         self.show()
@@ -208,6 +243,10 @@ class Window(QMainWindow):
     def cb_save_file_state_changed(self, int):
         self.g_settings_save_file_path.setEnabled(self.g_settings_save_file_cb.isChecked())
         CONFIG_DICT['save_ss'] = self.g_settings_save_file_cb.isChecked()
+
+        if CONFIG_DICT['ss_path'] == '':
+            self.init_save_path()
+
         update_config()
 
     def cb_cpy2_clip_state_changed(self, int):
@@ -225,6 +264,11 @@ class Window(QMainWindow):
     def closeEvent(self, event):
         if os.path.exists(TEMP_IMAGE_PATH):
             os.remove(TEMP_IMAGE_PATH)
+
+    def init_save_path(self):
+        cwd = os.getcwd()
+        CONFIG_DICT['ss_path'] = cwd
+        update_config()
 
 
 with open(CONFIG_FILE) as config:
