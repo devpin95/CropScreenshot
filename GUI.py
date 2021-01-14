@@ -258,7 +258,7 @@ class Window(QMainWindow):
         update_config()
 
     def cb_show_toast_on_capture_state_changed(self, int):
-        CONFIG_DICT['show_toast_on_capture'] = self.g_settings_show_toast_on_monitor_change.isChecked()
+        CONFIG_DICT['show_toast_on_capture'] = self.g_settings_show_toast_on_capture.isChecked()
         update_config()
 
     def closeEvent(self, event):
