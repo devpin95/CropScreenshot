@@ -40,7 +40,7 @@ def set_active_monitor(mid):
     print('monitor {} is now active'.format(active_monitor))
     if CONFIG_DICT['show_toast_on_monitor_change']:
         toaster = ToastNotifier()
-        toaster.show_toast("PowerSS", 'monitor {} is now active'.format(active_monitor), duration=2, threaded=True)
+        toaster.show_toast("PowerSS", 'monitor {} is now active'.format(active_monitor), duration=2, threaded=True, icon_path='assets\icon-pink-256x256.ico')
 
 
 def on_trigger():
