@@ -7,6 +7,7 @@ modifiers = {
     'home': 16777232,
     'esc': 16777216,
     'del': 16777223,
+    'enter': 16777220,
     'backspace': 16777219,
     'left': 16777234,
     'up': 16777235,
@@ -14,6 +15,7 @@ modifiers = {
     'down': 16777237,
     'page down': 16777239,
     'page up': 16777238,
+    'tab': 16777217,
     'f1': 16777264,
     'f2': 16777265,
     'f3': 16777266,
@@ -31,4 +33,6 @@ modifiers = {
 
 def qt_to_keyboard(qtval):
     key_list = list(modifiers.keys())
-    return key_list.index(qtval)
+    val_list = list(modifiers.values())
+    pos = val_list.index(qtval)
+    return key_list[pos]
