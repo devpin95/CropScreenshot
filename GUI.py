@@ -4,7 +4,7 @@ from PyQt5 import QtCore
 import sys
 import mss
 from PIL import Image
-from multiprocessing import Process
+from multiprocessing import Process, current_process
 from threading import RLock
 from CaptureScreen import start_listening_for_hotkeys
 from filelock import FileLock
@@ -59,7 +59,7 @@ class HotkeyListener:
     started = False
 
     def __init__(self):
-        self.process = Process(target=start_listening_for_hotkeys)
+        self.process = Process(target=start_listening_for_hotkeys, name="peepeepoopoo123")
         self.process.daemon = True
 
     def start(self):
@@ -114,7 +114,7 @@ class Window(QMainWindow):
         self.g_instructions_title.setStyleSheet('border: none;')
         g_instructions_layout.addWidget(self.g_instructions_title)
 
-        self.g_instructions_hotkeys = QLabel('ctrl+alt+[monitor number] - Set active monitor\nctrl+alt+s - Take screenshot')
+        self.g_instructions_hotkeys = QLabel('ctrl+alt+[monitor number] - Set active monitor\n{} - Take screenshot'.format(CONFIG_DICT['ss_hotkey']))
         self.g_instructions_hotkeys.setFont(QFont('Arial', 10))
         self.g_instructions_hotkeys.setStyleSheet('border: none;')
         g_instructions_layout.addWidget(self.g_instructions_hotkeys)
@@ -406,7 +406,7 @@ class Window(QMainWindow):
                                                               '}')
             print("trying to kill process")
             try:
-                HOTKEY_LISTENER.terminate()
+                HOTKEY_LISTENER.kill()
             except Exception as e:
                 print(e)
 
@@ -439,6 +439,7 @@ class Window(QMainWindow):
                 reseting = True
 
         if reseting:
+            key_list = []
             FLAG_CAPTURING_INPUT = False
             self.g_settings_hotkey_val.setText(CONFIG_DICT['ss_hotkey'])
             self.g_setting_hotkey_change_button.setStyleSheet('QPushButton {'
@@ -457,6 +458,7 @@ class Window(QMainWindow):
                                                               'border: 1px solid #666;'
                                                               '}')
             self.g_setting_hotkey_change_button.setText('Set')
+            self.g_instructions_hotkeys.setText('ctrl+alt+[monitor number] - Set active monitor\n{} - Take screenshot'.format(CONFIG_DICT['ss_hotkey']))
 
             print("trying to start process")
             try:
@@ -473,6 +475,7 @@ class Window(QMainWindow):
 
 
 if __name__ == '__main__':
+    print("Current Proc", current_process().name)
     print(os.getpid(), "in main gui")
     HOTKEY_LISTENER = HotkeyListener()
     HOTKEY_LISTENER.start()

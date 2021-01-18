@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 from win10toast import ToastNotifier
 import os
+from multiprocessing import current_process
 
 NUM_MONITORS = 3
 active_monitor = 1
@@ -18,6 +19,14 @@ FLOCK = FileLock(CONFIG_LOCK_FILE)
 
 
 def start_listening_for_hotkeys():
+    get_config()
+    keyboard.add_hotkey(CONFIG_DICT['ss_hotkey'], on_trigger)
+
+    switch_screen_shortcuts = ['ctrl+alt+' + str(i) for i in range(0, NUM_MONITORS)]
+    for sc in switch_screen_shortcuts:
+        keyboard.add_hotkey(sc, lambda sc=sc: set_active_monitor(sc[-1]))
+
+    print("Listening from", current_process().name)
     keyboard.wait()
 
 
@@ -45,7 +54,8 @@ def set_active_monitor(mid):
     print(os.getpid(), 'monitor {} is now active'.format(active_monitor))
     if CONFIG_DICT['show_toast_on_monitor_change']:
         toaster = ToastNotifier()
-        toaster.show_toast("PowerSS", 'monitor {} is now active'.format(active_monitor), duration=2, threaded=True, icon_path='assets\icon-pink-256x256.ico')
+        toaster.show_toast("PowerSS", 'monitor {} is now active'.format(active_monitor), duration=2, threaded=True,
+                           icon_path='assets\\icon-pink-256x256.ico')
 
 
 def on_trigger():
@@ -58,9 +68,10 @@ def on_trigger():
 
         img = Image.frombytes("RGB", scr_img.size, scr_img.bgra, "raw", "BGRX")
 
-        now = datetime.now().strftime("%m%d%Y%H%M%S")
+        # now = datetime.now().strftime("%m%d%Y%H%M%S")
+        now = datetime.now().strftime("%Y%m%d%H%M%S")
         if CONFIG_DICT['save_ss']:
-            path = '{}/{}screenshot.png'.format(CONFIG_DICT['ss_path'], now)
+            path = '{}/{}-ss.png'.format(CONFIG_DICT['ss_path'], now)
             print("PATH", path)
             img.save(path)
             toast_str += '{}-screenshot.png saved!'.format(now)
@@ -76,21 +87,6 @@ def on_trigger():
 
         if CONFIG_DICT['show_toast_on_capture']:
             toaster = ToastNotifier()
-            toaster.show_toast("PowerSS", toast_str, duration=5, threaded=True, icon_path='assets\icon-pink-256x256.ico')
+            toaster.show_toast("PowerSS", toast_str, duration=5, threaded=True,
+                               icon_path='assets\\icon-pink-256x256.ico')
 
-
-switch_screen_shortcuts = ['ctrl+alt+' + str(i) for i in range(0, NUM_MONITORS)]
-for sc in switch_screen_shortcuts:
-    keyboard.add_hotkey(sc, lambda sc=sc: set_active_monitor(sc[-1]))
-
-# parser = argparse.ArgumentParser()
-# parser.add_argument('hotkey', type=str, help='a string representing a hotkey to listen for')
-# args = parser.parse_args()
-#
-# hotkey = args.hotkey
-# keyboard.add_hotkey(hotkey, on_trigger)
-
-get_config()
-print(CONFIG_DICT['ss_hotkey'])
-keyboard.add_hotkey(CONFIG_DICT['ss_hotkey'], on_trigger)
-print("in captuer", os.getpid())
