@@ -1,10 +1,10 @@
-from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton, QFileDialog, QWidget, QVBoxLayout, QCheckBox, QHBoxLayout, QScrollArea, QAbstractScrollArea
-from PyQt5.QtGui import QFont, QCursor, QIcon
+from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton, QFileDialog, QWidget, QVBoxLayout, QCheckBox, QHBoxLayout, QScrollArea, QErrorMessage
+from PyQt5.QtGui import QFont, QCursor, QIcon, QKeyEvent
 from PyQt5 import QtCore
 import sys
 import mss
 from PIL import Image
-import threading
+from multiprocessing import Process
 from threading import RLock
 from CaptureScreen import start_listening_for_hotkeys
 from filelock import FileLock
@@ -38,6 +38,9 @@ CONFIG_FILE = 'config.json'
 CONFIG_LOCK_FILE = 'config.lock'
 CONFIG_DICT = {}
 FLOCK = FileLock(CONFIG_LOCK_FILE)
+HOTKEY_LISTENER = None
+
+FLAG_CAPTURING_INPUT = False
 
 key_list = []
 
@@ -51,39 +54,30 @@ def update_config():
             json.dump(CONFIG_DICT, fp)
 
 
-class GetHotkeyPopup(QMainWindow):
+class HotkeyListener:
+    process = None
+    started = False
+
     def __init__(self):
-        super().__init__()
+        self.process = Process(target=start_listening_for_hotkeys)
+        self.process.daemon = True
 
-        self.label = QLabel('Press esc to cancel\nPress enter to accept new hotkey')
-        self.label.show()
-        self.setFixedWidth(100)
-        self.setFixedHeight(100)
+    def start(self):
+        if not self.started:
+            print("starting process 1")
+            self.process.start()
+            self.started = True
+        else:
+            print("starting process 2")
+            self.process = Process(target=start_listening_for_hotkeys)
+            self.process.daemon = True
+            self.process.start()
 
-    def mycallback_release(self, e):
-        pass
+    def kill(self):
+        self.process.kill()
 
-    def mycallback_press(self, e):
-        global key_list
-        if e.name == 'esc':
-            key_list = []
-
-        if e.name not in key_list:
-            key_list.append(e.name)
-            hks = ''
-            for i in range(0, len(key_list) - 1):
-                hks += key_list[i] + '+'
-
-            hks += key_list[-1]
-            print(hks)
-
-    def get_hotkey(self):
-        global key_list
-
-        keyboard.on_press(self.mycallback_press)
-        keyboard.on_press(self.mycallback_release)
-
-        keyboard.wait('esc')
+    def terminate(self):
+        self.process.terminate()
 
 
 class Window(QMainWindow):
@@ -168,6 +162,7 @@ class Window(QMainWindow):
 
         self.g_setting_hotkey_change_button = QPushButton("Set")
         self.g_setting_hotkey_change_button.setFixedHeight(FIELD_HEIGHT)
+        self.g_setting_hotkey_change_button.setFocusPolicy(QtCore.Qt.NoFocus)
         # self.g_setting_hotkey_change_button.setFixedWidth(100)
         self.g_setting_hotkey_change_button.setStyleSheet('QPushButton {'
                                                           'border-radius: 2px;'
@@ -197,6 +192,7 @@ class Window(QMainWindow):
         self.g_settings_save_file_cb.setFont(QFont('Arial', 10))
         self.g_settings_save_file_cb.setStyleSheet("border: none;")
         self.g_settings_save_file_cb.stateChanged.connect(self.cb_save_file_state_changed)
+        self.g_settings_save_file_cb.setFocusPolicy(QtCore.Qt.NoFocus)
         # Checked after we create the path widget
 
         if CONFIG_DICT['ss_path'] == '':
@@ -213,6 +209,7 @@ class Window(QMainWindow):
                                                      'QLabel:hover{ border: 1px solid #666; }')
         self.g_settings_save_file_path.setCursor(QCursor(QtCore.Qt.PointingHandCursor))
         self.g_settings_save_file_path.mouseReleaseEvent = lambda event: self.get_ss_save_path()
+        self.g_settings_save_file_path.setFocusPolicy(QtCore.Qt.NoFocus)
 
         # now we can check it after the path widget has been made
         self.g_settings_save_file_cb.setChecked(CONFIG_DICT['save_ss'])
@@ -227,6 +224,7 @@ class Window(QMainWindow):
         self.g_settings_cpy2_clip.setStyleSheet('border: none;')
         self.g_settings_cpy2_clip.stateChanged.connect(self.cb_cpy2_clip_state_changed)
         self.g_settings_cpy2_clip.setChecked(CONFIG_DICT['copy_2_cb'])
+        self.g_settings_cpy2_clip.setFocusPolicy(QtCore.Qt.NoFocus)
         g_settings_layout.addWidget(self.g_settings_cpy2_clip)
 
         # Show toast on monitor change ---------------------------------------------------------------------------------
@@ -236,6 +234,7 @@ class Window(QMainWindow):
         self.g_settings_show_toast_on_monitor_change.setStyleSheet('border: none;')
         self.g_settings_show_toast_on_monitor_change.stateChanged.connect(self.cb_show_toast_on_monitor_state_changed)
         self.g_settings_show_toast_on_monitor_change.setChecked(CONFIG_DICT['show_toast_on_monitor_change'])
+        self.g_settings_show_toast_on_monitor_change.setFocusPolicy(QtCore.Qt.NoFocus)
         g_settings_layout.addWidget(self.g_settings_show_toast_on_monitor_change)
 
         # Show toast on capture ----------------------------------------------------------------------------------------
@@ -245,6 +244,7 @@ class Window(QMainWindow):
         self.g_settings_show_toast_on_capture.setStyleSheet('border: none;')
         self.g_settings_show_toast_on_capture.stateChanged.connect(self.cb_show_toast_on_capture_state_changed)
         self.g_settings_show_toast_on_capture.setChecked(CONFIG_DICT['show_toast_on_capture'])
+        self.g_settings_show_toast_on_capture.setFocusPolicy(QtCore.Qt.NoFocus)
         g_settings_layout.addWidget(self.g_settings_show_toast_on_capture)
 
         g_settings_layout.addStretch()
@@ -290,6 +290,7 @@ class Window(QMainWindow):
                                          'background-repeat: no-repeat; '
                                          'background-position: center center; '
                                          'border: 1px solid #bbb;'.format(DEFAULT_PREVIEW_PATH))
+        self.image_preview.setFocusPolicy(QtCore.Qt.NoFocus)
         preview_layout.addWidget(self.image_preview)
 
         self.g_preview.setLayout(preview_layout)
@@ -341,6 +342,7 @@ class Window(QMainWindow):
                                      'border: 1px solid #666;'
                                      '}')
                 button.setCursor(QCursor(QtCore.Qt.PointingHandCursor))
+                button.setFocusPolicy(QtCore.Qt.NoFocus)
                 button.clicked.connect(lambda: self.preview_screen())
                 self.monitor_buttons.append(button)
 
@@ -376,9 +378,6 @@ class Window(QMainWindow):
         CONFIG_DICT['show_toast_on_capture'] = self.g_settings_show_toast_on_capture.isChecked()
         update_config()
 
-    def get_custom_hotkey(self):
-        pass
-
     def init_save_path(self):
         cwd = os.getcwd()
         CONFIG_DICT['ss_path'] = cwd
@@ -388,30 +387,111 @@ class Window(QMainWindow):
         if os.path.exists(TEMP_IMAGE_PATH):
             os.remove(TEMP_IMAGE_PATH)
 
+    def get_custom_hotkey(self):
+        global FLAG_CAPTURING_INPUT, HOTKEY_LISTENER
+        FLAG_CAPTURING_INPUT = not FLAG_CAPTURING_INPUT
+
+        if FLAG_CAPTURING_INPUT:
+            self.g_setting_hotkey_change_button.setText('Enter to Accept, Esc to cancel')
+            self.g_settings_hotkey_val.setText('Enter a hotkey...')
+
+            self.g_setting_hotkey_change_button.setStyleSheet('QPushButton { '
+                                                              'background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,stop: 0 #e74c3c, stop: 1 #c0392b); border: 1px solid #bbb;'
+                                                              '} '
+                                                              'QPushButton:pressed { '
+                                                              'background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,stop: 0 #c0392b, stop: 1 #e74c3c); '
+                                                              '} '
+                                                              'QPushButton:hover {'
+                                                              'border: 1px solid #666;'
+                                                              '}')
+            print("trying to kill process")
+            try:
+                HOTKEY_LISTENER.terminate()
+            except Exception as e:
+                print(e)
+
+    def capture_hotkey(self, key):
+        global FLAG_CAPTURING_INPUT, key_list, HOTKEY_LISTENER
+
+        input_flags = ['esc', 'enter']
+
+        try:
+            name = chr(key)
+        except:
+            name = qt_to_keyboard(key)
+
+        if name not in key_list and name not in input_flags:
+            key_list.append(name)
+            self.g_settings_hotkey_val.setText('+'.join(key_list))
+
+        reseting = False
+        if name == 'esc':
+            key_list = []
+            reseting = True
+        elif name == 'enter':
+            if len(key_list) == 0:
+                error_dialog = QErrorMessage()
+                error_dialog.showMessage('Must enter a sequence of keys...')
+                error_dialog.exec_()
+            else:
+                CONFIG_DICT['ss_hotkey'] = '+'.join(key_list)
+                update_config()
+                reseting = True
+
+        if reseting:
+            FLAG_CAPTURING_INPUT = False
+            self.g_settings_hotkey_val.setText(CONFIG_DICT['ss_hotkey'])
+            self.g_setting_hotkey_change_button.setStyleSheet('QPushButton {'
+                                                              'border-radius: 2px;'
+                                                              'background-color: qlineargradient('
+                                                              'x1: 0, y1: 0, x2: 0, y2: 1,'
+                                                              'stop: 0 #fff, stop: 1 #eee); '
+                                                              'border: 1px solid #bbb;'
+                                                              '} '
+                                                              'QPushButton:pressed { '
+                                                              'background-color: qlineargradient('
+                                                              'x1: 0, y1: 0, x2: 0, y2: 1,'
+                                                              'stop: 0 #eee, stop: 1 #fff); '
+                                                              '} '
+                                                              'QPushButton:hover {'
+                                                              'border: 1px solid #666;'
+                                                              '}')
+            self.g_setting_hotkey_change_button.setText('Set')
+
+            print("trying to start process")
+            try:
+                HOTKEY_LISTENER.start()
+            except Exception as e:
+                print(e)
+
     def eventFilter(self, obj, event):
-        if event.type() == QtCore.QEvent.KeyPress:
-            print(event.key())
+        global FLAG_CAPTURING_INPUT
+        if event.type() == QtCore.QEvent.KeyPress and FLAG_CAPTURING_INPUT:
+            self.capture_hotkey(event.key())
 
         return super(Window, self).eventFilter(obj, event)
 
 
-with open(CONFIG_FILE) as config:
-    CONFIG_DICT = json.load(config)
+if __name__ == '__main__':
+    print(os.getpid(), "in main gui")
+    HOTKEY_LISTENER = HotkeyListener()
+    HOTKEY_LISTENER.start()
 
-app = QApplication([])
+    with open(CONFIG_FILE) as config:
+        CONFIG_DICT = json.load(config)
 
-app_icon = QIcon()
-app_icon.addFile('./assets/icon-16x16.png', QtCore.QSize(16, 16))
-app_icon.addFile('./assets/icon-24x24.png', QtCore.QSize(24, 24))
-app_icon.addFile('./assets/icon-32x32.png', QtCore.QSize(32, 32))
-app_icon.addFile('./assets/icon-48x48.png', QtCore.QSize(48, 48))
-app_icon.addFile('./assets/icon-256x256.png', QtCore.QSize(256, 256))
+    app = QApplication([])
 
-app.setWindowIcon(app_icon)
+    app_icon = QIcon()
+    app_icon.addFile('./assets/icon-16x16.png', QtCore.QSize(16, 16))
+    app_icon.addFile('./assets/icon-24x24.png', QtCore.QSize(24, 24))
+    app_icon.addFile('./assets/icon-32x32.png', QtCore.QSize(32, 32))
+    app_icon.addFile('./assets/icon-48x48.png', QtCore.QSize(48, 48))
+    app_icon.addFile('./assets/icon-256x256.png', QtCore.QSize(256, 256))
 
-window = Window()
-window.installEventFilter(window)
-start_gui()
+    app.setWindowIcon(app_icon)
 
-listener = threading.Thread(target=start_listening_for_hotkeys)
-listener.start()
+    window = Window()
+    # window.installEventFilter(window)
+    start_gui()
+
