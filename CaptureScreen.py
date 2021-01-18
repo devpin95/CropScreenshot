@@ -7,6 +7,7 @@ from filelock import FileLock
 import json
 from datetime import datetime
 from win10toast import ToastNotifier
+import os
 
 NUM_MONITORS = 3
 active_monitor = 1
@@ -14,6 +15,10 @@ CONFIG_LOCK_FILE = 'config.lock'
 CONFIG_FILE = 'config.json'
 CONFIG_DICT = {}
 FLOCK = FileLock(CONFIG_LOCK_FILE)
+
+
+def start_listening_for_hotkeys():
+    keyboard.wait()
 
 
 def get_config():
@@ -37,7 +42,7 @@ def set_active_monitor(mid):
     get_config()
 
     active_monitor = int(mid)
-    print('monitor {} is now active'.format(active_monitor))
+    print(os.getpid(), 'monitor {} is now active'.format(active_monitor))
     if CONFIG_DICT['show_toast_on_monitor_change']:
         toaster = ToastNotifier()
         toaster.show_toast("PowerSS", 'monitor {} is now active'.format(active_monitor), duration=2, threaded=True, icon_path='assets\icon-pink-256x256.ico')
@@ -73,13 +78,19 @@ def on_trigger():
             toaster = ToastNotifier()
             toaster.show_toast("PowerSS", toast_str, duration=5, threaded=True, icon_path='assets\icon-pink-256x256.ico')
 
+
 switch_screen_shortcuts = ['ctrl+alt+' + str(i) for i in range(0, NUM_MONITORS)]
 for sc in switch_screen_shortcuts:
     keyboard.add_hotkey(sc, lambda sc=sc: set_active_monitor(sc[-1]))
 
-shortcut = "ctrl+alt+s"
-keyboard.add_hotkey(shortcut, on_trigger)
+# parser = argparse.ArgumentParser()
+# parser.add_argument('hotkey', type=str, help='a string representing a hotkey to listen for')
+# args = parser.parse_args()
+#
+# hotkey = args.hotkey
+# keyboard.add_hotkey(hotkey, on_trigger)
 
-def start_listening_for_hotkeys():
-    keyboard.wait()
-
+get_config()
+print(CONFIG_DICT['ss_hotkey'])
+keyboard.add_hotkey(CONFIG_DICT['ss_hotkey'], on_trigger)
+print("in captuer", os.getpid())
