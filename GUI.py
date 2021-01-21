@@ -1,10 +1,12 @@
+# pyinstaller -F -i C:\Users\devpi\Documents\projects\CropScreenshot\assets\icon-pink-256x256.ico -n PowerSS --debug GUI.py
+
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton, QFileDialog, QWidget, QVBoxLayout, QCheckBox, QHBoxLayout, QSpinBox, QErrorMessage
 from PyQt5.QtGui import QFont, QCursor, QIcon, QKeyEvent
 from PyQt5 import QtCore
 import sys
 import mss
 from PIL import Image
-from multiprocessing import Process, current_process
+from multiprocessing import Process, current_process, freeze_support
 from threading import RLock
 from CaptureScreen import start_listening_for_hotkeys
 from filelock import FileLock
@@ -42,6 +44,7 @@ HOTKEY_LISTENER = None
 FLAG_CAPTURING_INPUT = False
 
 key_list = []
+
 
 def start_gui():
     sys.exit(app.exec_())
@@ -596,6 +599,7 @@ class Window(QMainWindow):
 
 
 if __name__ == '__main__':
+    freeze_support()
     print("Current Proc", current_process().name)
     print(os.getpid(), "in main gui")
     HOTKEY_LISTENER = HotkeyListener()
@@ -616,6 +620,6 @@ if __name__ == '__main__':
     app.setWindowIcon(app_icon)
 
     window = Window()
-    # window.installEventFilter(window)
+    window.installEventFilter(window)
     start_gui()
 
