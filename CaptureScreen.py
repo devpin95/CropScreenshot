@@ -12,6 +12,7 @@ from multiprocessing import current_process
 
 NUM_MONITORS = 3
 active_monitor = 1
+TEMP_IMG_PATH = 'temp_img'
 CONFIG_LOCK_FILE = 'config.lock'
 CONFIG_FILE = 'config.json'
 CONFIG_DICT = {}
@@ -61,6 +62,7 @@ def set_active_monitor(mid):
 def on_trigger():
 
     get_config()
+    cwd = os.getcwd()
 
     with mss.mss() as scr:
         toast_str = ''
@@ -70,18 +72,40 @@ def on_trigger():
 
         # now = datetime.now().strftime("%m%d%Y%H%M%S")
         now = datetime.now().strftime("%Y%m%d%H%M%S")
+        path = '{}/{}-ss.png'.format(CONFIG_DICT['ss_path'], now)
         if CONFIG_DICT['save_ss']:
-            path = '{}/{}-ss.png'.format(CONFIG_DICT['ss_path'], now)
             print("PATH", path)
-            img.save(path)
+            img.save(path, optimize=CONFIG_DICT['ss_optimize'])
             toast_str += '{}-screenshot.png saved!'.format(now)
 
-        output = BytesIO()
-        img.save(output, "BMP")
-        data = output.getvalue()[14:]
-        output.close()
+        temp_path = cwd + '\\' + TEMP_IMG_PATH + '.png'
 
         if CONFIG_DICT['copy_2_cb']:
+            img.save(temp_path, optimize=CONFIG_DICT['ss_optimize'])
+
+            size = os.stat(temp_path).st_size / 1000000
+
+            if CONFIG_DICT['ss_limit_size']:
+                while size > CONFIG_DICT['ss_mb_size_limit']:
+                    img_width, img_height = img.size
+
+                    print("resizing", img_width, img_height, img_width - int(img_width * 0.25), img_height - int(img_height * 0.25))
+
+                    temp_img = img.resize((img_width - int(img_width * 0.25), img_height - int(img_height * 0.25)), Image.ANTIALIAS)
+                    print(temp_img.size)
+                    temp_img.save(temp_path, optimize=CONFIG_DICT['ss_optimize'])
+                    size = os.stat(temp_path).st_size / 1000000
+                    print('file size after resize', size)
+
+            cb_img = Image.open(temp_path)
+
+            output = BytesIO()
+            cb_img.save(output, "BMP")
+            data = output.getvalue()[14:]
+            output.close()
+
+            os.remove(temp_path)
+
             send_to_clipboard(cb.CF_DIB, data)
             toast_str = 'Copied to Clipboard\n' + toast_str
 
