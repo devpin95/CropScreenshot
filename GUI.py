@@ -1,6 +1,6 @@
 # pyinstaller -F -i C:\Users\devpi\Documents\projects\CropScreenshot\assets\icon-pink-256x256.ico -n PowerSS --debug GUI.py
 
-from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton, QFileDialog, QWidget, QVBoxLayout, QCheckBox, QHBoxLayout, QSpinBox, QErrorMessage
+from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton, QFileDialog, QWidget, QVBoxLayout, QCheckBox, QHBoxLayout, QSpinBox, QErrorMessage, QTabWidget
 from PyQt5.QtGui import QFont, QCursor, QIcon, QKeyEvent
 from PyQt5 import QtCore
 import sys
@@ -31,8 +31,10 @@ DICT_LOCK = RLock()
 
 APP_WIDTH = 525
 APP_HEIGHT = 850
-WIDGET_WIDTH = 500
+WIDGET_WIDTH = 485
 FIELD_HEIGHT = 30
+
+ESCAPE_KEY_CODE = 16777216
 
 WINDOW_TITLE = 'PowerSS'
 CONFIG_FILE = 'config.json'
@@ -83,22 +85,153 @@ class HotkeyListener:
 
 
 class Window(QMainWindow):
+    # set this as a member variable so that we can access elements while we listen for hotkeys
+    screen_cap_tab = None
+    image_resize_tab = None
+
     def __init__(self):
         super().__init__()
 
         # self.setStyleSheet("padding: 5px 10px 5px 10px")
         self.setFixedWidth(APP_WIDTH)
-        self.setFixedHeight(APP_HEIGHT)
+        self.setFixedHeight(APP_HEIGHT + 50)
         self.setWindowTitle(WINDOW_TITLE)
 
         # self.setWindowIcon(app_icon)
 
+        self.tabs = QTabWidget()
+
+        self.tabs.setStyleSheet("QTabWidget::pane {"
+                                "background-color: #f00}")
+
+        self.tabs.currentChanged.connect(self.tab_change_event)
+        self.tabs.tabBarClicked.connect(lambda: self.capture_hotkey(ESCAPE_KEY_CODE))
+
+        self.tab1 = QWidget()
+        self.tab2 = QWidget()
+        self.tabs.resize(APP_WIDTH, APP_HEIGHT)
+
+        self.tab1_ui()
+        self.tab2_ui()
+
+        self.setCentralWidget(self.tabs)
+
+        self.show()
+
+    def tab1_ui(self):
+        # Screen Capture tab
+        self.tab1.layout = QVBoxLayout(self)
+
+        self.tabs.setStyleSheet("QTabWidget::tab-bar {"
+                                "background-color: #f00}")
+
+        self.screen_cap_tab = ScreenCaptureTab(self)
+        self.tab1.layout.addWidget(self.screen_cap_tab.main_widget)
+        self.tab1.setLayout(self.tab1.layout)
+
+        self.tabs.addTab(self.tab1, "Screen Capture")
+
+    def tab2_ui(self):
+        self.tabs.addTab(self.tab2, "Resize Image")
+
+        self.tab2.layout = QVBoxLayout(self)
+
+        self.image_resize_tab = ImageResizeTab(self)
+        self.tab2.layout.addWidget(self.image_resize_tab.main_widget)
+        self.tab2.setLayout(self.tab2.layout)
+
+    def tab_change_event(self, index):
+        global FLAG_CAPTURING_INPUT
+
+        if index is 0:
+            self.setFixedWidth(APP_WIDTH)
+            self.setFixedHeight(APP_HEIGHT)
+        elif index is 1:
+            if FLAG_CAPTURING_INPUT:
+                self.capture_hotkey('esc')
+            self.setFixedWidth(APP_WIDTH)
+            self.setFixedHeight(300 + 50)
+
+    def eventFilter(self, obj, event):
+        # eventFilter for the main window
+        global FLAG_CAPTURING_INPUT
+        if event.type() == QtCore.QEvent.KeyPress and FLAG_CAPTURING_INPUT:
+            self.capture_hotkey(event.key())
+
+        return super(Window, self).eventFilter(obj, event)
+
+    def capture_hotkey(self, key):
+        global FLAG_CAPTURING_INPUT, key_list, HOTKEY_LISTENER
+
+        input_flags = ['esc', 'enter']
+
+        print(key)
+
+        try:
+            name = chr(key)
+        except:
+            name = qt_to_keyboard(key)
+
+        if name not in key_list and name not in input_flags:
+            key_list.append(name)
+            self.screen_cap_tab.g_settings_hotkey_val.setText('+'.join(key_list))
+
+        resetting = False
+        if name == 'esc':
+            key_list = []
+            resetting = True
+        elif name == 'enter':
+            if len(key_list) == 0:
+                error_dialog = QErrorMessage()
+                error_dialog.showMessage('Must enter a sequence of keys...')
+                error_dialog.exec_()
+            else:
+                CONFIG_DICT['ss_hotkey'] = '+'.join(key_list)
+                update_config()
+                resetting = True
+
+        if resetting:
+            key_list = []
+            FLAG_CAPTURING_INPUT = False
+            self.screen_cap_tab.g_settings_hotkey_val.setText(CONFIG_DICT['ss_hotkey'])
+            self.screen_cap_tab.g_setting_hotkey_change_button.setStyleSheet('QPushButton {'
+                                                              'border-radius: 2px;'
+                                                              'background-color: qlineargradient('
+                                                              'x1: 0, y1: 0, x2: 0, y2: 1,'
+                                                              'stop: 0 #fff, stop: 1 #eee); '
+                                                              'border: 1px solid #bbb;'
+                                                              '} '
+                                                              'QPushButton:pressed { '
+                                                              'background-color: qlineargradient('
+                                                              'x1: 0, y1: 0, x2: 0, y2: 1,'
+                                                              'stop: 0 #eee, stop: 1 #fff); '
+                                                              '} '
+                                                              'QPushButton:hover {'
+                                                              'border: 1px solid #666;'
+                                                              '}')
+            self.screen_cap_tab.g_setting_hotkey_change_button.setText('Set')
+            self.screen_cap_tab.g_instructions_hotkeys.setText('ctrl+alt+[monitor number] - Set active monitor\n{} - Take screenshot'.format(CONFIG_DICT['ss_hotkey']))
+
+            print("trying to start process")
+            try:
+                HOTKEY_LISTENER.start()
+            except Exception as e:
+                print(e)
+
+
+class ScreenCaptureTab(QWidget):
+    main_layout = None
+    main_widget = None
+
+    def __init__(self, parent):
+        super(QWidget, self).__init__(parent)
+
         self.monitor_buttons = []
 
-        main_layout = QVBoxLayout()
+        self.main_layout = QVBoxLayout()
         self.main_widget = QWidget(self)
-        self.main_widget.setFixedWidth(APP_WIDTH)
-        self.main_widget.setFixedHeight(APP_HEIGHT)
+        # self.main_widget.setFixedWidth(APP_WIDTH)
+        # self.main_widget.setFixedHeight(APP_HEIGHT)
 
         # Instruction --------------------------------------------------------------------------------------------------
         self.g_instructions = QWidget(self)
@@ -116,7 +249,8 @@ class Window(QMainWindow):
         self.g_instructions_title.setStyleSheet('border: none;')
         g_instructions_layout.addWidget(self.g_instructions_title)
 
-        self.g_instructions_hotkeys = QLabel('ctrl+alt+[monitor number] - Set active monitor\n{} - Take screenshot'.format(CONFIG_DICT['ss_hotkey']))
+        self.g_instructions_hotkeys = QLabel(
+            'ctrl+alt+[monitor number] - Set active monitor\n{} - Take screenshot'.format(CONFIG_DICT['ss_hotkey']))
         self.g_instructions_hotkeys.setFont(QFont('Arial', 10))
         self.g_instructions_hotkeys.setStyleSheet('border: none;')
         g_instructions_layout.addWidget(self.g_instructions_hotkeys)
@@ -336,7 +470,8 @@ class Window(QMainWindow):
         self.g_settings_show_toast_on_monitor_change.setFixedHeight(FIELD_HEIGHT)
         self.g_settings_show_toast_on_monitor_change.setFont(QFont('Arial', 10))
         self.g_settings_show_toast_on_monitor_change.setStyleSheet('border: none;')
-        self.g_settings_show_toast_on_monitor_change.setToolTip('Show notification when the active monitor has been changed')
+        self.g_settings_show_toast_on_monitor_change.setToolTip(
+            'Show notification when the active monitor has been changed')
         self.g_settings_show_toast_on_monitor_change.stateChanged.connect(self.cb_show_toast_on_monitor_state_changed)
         self.g_settings_show_toast_on_monitor_change.setChecked(CONFIG_DICT['show_toast_on_monitor_change'])
         self.g_settings_show_toast_on_monitor_change.setFocusPolicy(QtCore.Qt.NoFocus)
@@ -360,7 +495,7 @@ class Window(QMainWindow):
         preview_layout = QVBoxLayout()
         preview_layout.setContentsMargins(0, 0, 0, 0)
         self.g_preview = QWidget(self)
-        self.g_preview.setFixedHeight(400)
+        self.g_preview.setFixedHeight(350)
         self.g_preview.setFixedWidth(500)
         self.g_preview.setStyleSheet('border-radius: 3px')
 
@@ -386,8 +521,8 @@ class Window(QMainWindow):
 
         # image --------------------------------------------------------------------------------------------------------
         self.image_preview = QWidget(self)
-        self.image_preview.setFixedWidth(490)
-        self.image_preview.setFixedHeight(281)
+        self.image_preview.setFixedWidth(WIDGET_WIDTH)
+        self.image_preview.setFixedHeight((1080 * WIDGET_WIDTH) / 1920)
         self.image_preview.setStyleSheet('background-color:#eee; '
                                          'border: 1px solid #bbb; '
                                          'border-radius: 2px;'
@@ -402,23 +537,11 @@ class Window(QMainWindow):
         self.g_preview.setLayout(preview_layout)
 
         # Add Widgets to main widget -----------------------------------------------------------------------------------
-        main_layout.addWidget(self.g_instructions)
-        main_layout.addWidget(self.g_settings)
-        main_layout.addWidget(self.g_preview)
-        main_layout.addStretch()
-        self.main_widget.setLayout(main_layout)
-
-        # Scrollbar ----------------------------------------------------------------------------------------------------
-        # self.scroller = QScrollArea(self)
-        # self.scroller.setWidget(self.main_widget)
-        # self.scroller.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        # self.scroller.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        # self.scroller.setWidgetResizable(True)
-        # self.scroller.setFixedWidth(APP_WIDTH)
-        # self.scroller.setFixedHeight(APP_HEIGHT)
-        # self.scroller.installEventFilter(self)
-
-        self.show()
+        self.main_layout.addWidget(self.g_instructions)
+        self.main_layout.addWidget(self.g_settings)
+        self.main_layout.addWidget(self.g_preview)
+        self.main_layout.addStretch()
+        self.main_widget.setLayout(self.main_layout)
 
     def get_ss_save_path(self):
         file = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
@@ -530,73 +653,39 @@ class Window(QMainWindow):
             except Exception as e:
                 print(e)
 
-    def capture_hotkey(self, key):
-        global FLAG_CAPTURING_INPUT, key_list, HOTKEY_LISTENER
-
-        input_flags = ['esc', 'enter']
-
-        try:
-            name = chr(key)
-        except:
-            name = qt_to_keyboard(key)
-
-        if name not in key_list and name not in input_flags:
-            key_list.append(name)
-            self.g_settings_hotkey_val.setText('+'.join(key_list))
-
-        reseting = False
-        if name == 'esc':
-            key_list = []
-            reseting = True
-        elif name == 'enter':
-            if len(key_list) == 0:
-                error_dialog = QErrorMessage()
-                error_dialog.showMessage('Must enter a sequence of keys...')
-                error_dialog.exec_()
-            else:
-                CONFIG_DICT['ss_hotkey'] = '+'.join(key_list)
-                update_config()
-                reseting = True
-
-        if reseting:
-            key_list = []
-            FLAG_CAPTURING_INPUT = False
-            self.g_settings_hotkey_val.setText(CONFIG_DICT['ss_hotkey'])
-            self.g_setting_hotkey_change_button.setStyleSheet('QPushButton {'
-                                                              'border-radius: 2px;'
-                                                              'background-color: qlineargradient('
-                                                              'x1: 0, y1: 0, x2: 0, y2: 1,'
-                                                              'stop: 0 #fff, stop: 1 #eee); '
-                                                              'border: 1px solid #bbb;'
-                                                              '} '
-                                                              'QPushButton:pressed { '
-                                                              'background-color: qlineargradient('
-                                                              'x1: 0, y1: 0, x2: 0, y2: 1,'
-                                                              'stop: 0 #eee, stop: 1 #fff); '
-                                                              '} '
-                                                              'QPushButton:hover {'
-                                                              'border: 1px solid #666;'
-                                                              '}')
-            self.g_setting_hotkey_change_button.setText('Set')
-            self.g_instructions_hotkeys.setText('ctrl+alt+[monitor number] - Set active monitor\n{} - Take screenshot'.format(CONFIG_DICT['ss_hotkey']))
-
-            print("trying to start process")
-            try:
-                HOTKEY_LISTENER.start()
-            except Exception as e:
-                print(e)
-
     def set_file_size(self):
         CONFIG_DICT['ss_mb_size_limit'] = self.g_settings_size_val.value()
         update_config()
 
-    def eventFilter(self, obj, event):
-        global FLAG_CAPTURING_INPUT
-        if event.type() == QtCore.QEvent.KeyPress and FLAG_CAPTURING_INPUT:
-            self.capture_hotkey(event.key())
 
-        return super(Window, self).eventFilter(obj, event)
+class ImageResizeTab(QWidget):
+    main_widget = None
 
+    def __init__(self, parent):
+        super(QWidget, self).__init__(parent)
+
+        self.main_layout = QVBoxLayout()
+        self.main_widget = QWidget(self)
+
+        file_size_font = QFont('Arial', 10)
+        file_size_font.setBold(True)
+
+        self.preview_label = QLabel("Image Size")
+        self.preview_label.setFont(file_size_font)
+        self.main_layout.addWidget(self.preview_label)
+
+        self.g_settings_size_val = QSpinBox()
+        self.g_settings_size_val.setRange(1, 200)
+        self.g_settings_size_val.setFixedWidth(75)
+        self.g_settings_size_val.setFixedHeight(FIELD_HEIGHT)
+        self.g_settings_size_val.setCursor(QCursor(QtCore.Qt.PointingHandCursor))
+        self.g_settings_size_val.setSuffix(" MB")
+        # self.g_settings_size_val.valueChanged.connect(self.set_file_size)
+        self.g_settings_size_val.setValue(8)
+
+        self.main_layout.addWidget(self.g_settings_size_val)
+
+        self.main_widget.setLayout(self.main_layout)
 
 if __name__ == '__main__':
     freeze_support()
