@@ -1,5 +1,5 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QGraphicsOpacityEffect, QPushButton, QHBoxLayout, QFileDialog
-from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QDragLeaveEvent, QMouseEvent, QPixmap, QCursor, QClipboard
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QGraphicsOpacityEffect, QPushButton, QHBoxLayout, QFileDialog, QGraphicsDropShadowEffect
+from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QDragLeaveEvent, QMouseEvent, QPixmap, QCursor, QClipboard, QColor
 from PyQt5 import QtCore, Qt
 from PIL import Image
 from io import BytesIO
@@ -18,8 +18,8 @@ class ImageCropTab(QWidget):
 
     focused = False
 
-    tab_width = constants.APP_WIDTH
-    tab_height = constants.WIDGET_HEIGHT_HD_RATIO + 15
+    req_width = constants.APP_WIDTH
+    req_height = constants.WIDGET_HEIGHT_HD_RATIO + 15
 
     current_image_path = ''
     dragging = False
@@ -49,13 +49,8 @@ class ImageCropTab(QWidget):
                                                       mods['shift'],
                                                       letter['c']
                                                   ])
-        globals.keyEvent.subscribe_to_combo_event(lambda: mods['ctrl'],
-                                                  [
-                                                      mods['ctrl'],
-                                                      mods['shift'],
-                                                      letter['v']
-                                                  ])
-        globals.keyEvent.subscribe_to_combo_event(lambda: print("CROP SAVE!") if self.focused else mods['ctrl'],
+
+        globals.keyEvent.subscribe_to_combo_event(self.shortcut_save_image,
                                                   [
                                                       mods['ctrl'],
                                                       mods['shift'],
@@ -78,6 +73,14 @@ class ImageCropTab(QWidget):
         self.drop_area.dragEnterEvent = self.dragEnterEvent
         self.drop_area.dragLeaveEvent = self.dragLeaveEvent
         self.drop_area.dropEvent = self.dropEvent
+
+        self.dropshadow = QGraphicsDropShadowEffect()
+        self.dropshadow.setYOffset(3)
+        self.dropshadow.setXOffset(0)
+        self.dropshadow.setColor(QColor(0, 0, 0))
+        self.dropshadow.setBlurRadius(10)
+
+        self.drop_area.setGraphicsEffect(None)
 
         self.drop_area.setMouseTracking(True)
         self.drop_area.mousePressEvent = self.mousePressEvent
@@ -120,25 +123,25 @@ class ImageCropTab(QWidget):
         self.actions_group.save_button.setFocusPolicy(QtCore.Qt.NoFocus)
         self.actions_group.save_button.setFixedWidth(constants.FIELD_HEIGHT)
         self.actions_group.save_button.setStyleSheet("""
-                                                                    QPushButton {
-                                                                        border-radius: 2px;
-                                                                        background-image: url(assets/save.png);
-                                                                        background-repeat: no-repeat; 
-                                                                        background-position: center center;
-                                                                        background-color: qlineargradient(
-                                                                            x1: 0, y1: 0, x2: 0, y2: 1,
-                                                                            stop: 0 #fff, stop: 1 #eee); 
-                                                                        border: 1px solid #bbb;
-                                                                    }
-                                                                    QPushButton:pressed {
-                                                                        background-color: qlineargradient(
-                                                                            x1: 0, y1: 0, x2: 0, y2: 1,
-                                                                            stop: 0 #eee, stop: 1 #fff);
-                                                                    }
-                                                                    QPushButton:hover {
-                                                                        border: 1px solid #666;
-                                                                    }
-                                                                     """)
+                                                    QPushButton {
+                                                        border-radius: 2px;
+                                                        background-image: url(assets/save.png);
+                                                        background-repeat: no-repeat; 
+                                                        background-position: center center;
+                                                        background-color: qlineargradient(
+                                                            x1: 0, y1: 0, x2: 0, y2: 1,
+                                                            stop: 0 #fff, stop: 1 #eee); 
+                                                        border: 1px solid #bbb;
+                                                    }
+                                                    QPushButton:pressed {
+                                                        background-color: qlineargradient(
+                                                            x1: 0, y1: 0, x2: 0, y2: 1,
+                                                            stop: 0 #eee, stop: 1 #fff);
+                                                    }
+                                                    QPushButton:hover {
+                                                        border: 1px solid #666;
+                                                    }
+                                                     """)
         self.actions_group.save_button.setCursor(QCursor(QtCore.Qt.PointingHandCursor))
         self.actions_group.save_button.clicked.connect(self.save_image)
         self.actions_group.save_button.setToolTip("Save")
@@ -236,20 +239,6 @@ class ImageCropTab(QWidget):
                     self.quadrant = 'IV'
                     print("Moved to quadrant IV")
 
-
-            # str = ''
-            # if dis_x < 0:
-            #     str += 'right'
-            # else:
-            #     str += 'left'
-            #
-            # if dis_y < 0:
-            #     str += ' below'
-            # else:
-            #     str += ' above'
-
-            # print(dis_x, dis_y)
-
     def mousePressEvent(self, a0: QMouseEvent) -> None:
         print("Click!")
         self.dragging = True
@@ -302,12 +291,16 @@ class ImageCropTab(QWidget):
             self.actions_group.copy_button.hide()
             self.ready_to_copy = False
 
+            self.drop_area.setGraphicsEffect(self.dropshadow)
+
         else:
             a0.ignore()
 
     def crop_image(self, key, params=None):
         if not self.ready_to_crop:
             return
+
+        self.ready_to_crop = False
 
         startx, starty = self.dragging_start_pos
         endx, endy = self.dragging_end_pos
@@ -389,27 +382,33 @@ class ImageCropTab(QWidget):
 
         self.maxx = target_width
         self.maxy = target_height
-        self.tab_width = target_width + 40
-        self.tab_height = target_height + 15
-        self.resize_window(self.tab_height + constants.FIELD_HEIGHT + 15 if show_options else self.tab_height, self.tab_width)
+        self.req_width = target_width + 40
+        self.req_height = target_height + 15
+
+        if show_options:
+            self.req_height += constants.FIELD_HEIGHT + 15
+
+        self.resize_window(self.req_height, self.req_width)
         self.actions_group.setFixedWidth(target_width)
         self.drop_area.setFixedWidth(target_width)
         self.drop_area.setFixedHeight(target_height)
         self.drop_area.setStyleSheet("""
-                                                 QLabel {
-                                                     background-image: url(%s);
-                                                     background-repeat:no-repeat;
-                                                     background-position: center;
-                                                 }
-                                                 """ % 'temp/temp_crop_image_preview.png')
+                                     QLabel {
+                                         background-image: url(%s);
+                                         background-repeat:no-repeat;
+                                         background-position: center;
+                                         border: 1px solid #111;
+                                         border-radius: 2px;
+                                     }
+                                     """ % 'temp/temp_crop_image_preview.png')
 
         self.crop_mask.setStyleSheet("""
-                                                 QWidget {
-                                                    background-image: none;
-                                                    background-color: #fff;
-                                                    border: 1px solid #111;
-                                                 }
-                                                 """)
+                                     QWidget {
+                                        background-image: none;
+                                        background-color: #fff;
+                                        border: 1px solid #111;
+                                     }
+                                     """)
         self.crop_mask.move(0, 0)
         self.crop_mask.resize(0, 0)
         self.crop_mask.show()
@@ -424,6 +423,8 @@ class ImageCropTab(QWidget):
     def shortcut_copy_1_clipboard(self):
         if not self.focused:
             return
+
+        print("COPY!")
 
         current_time = time.time()
 
@@ -445,6 +446,14 @@ class ImageCropTab(QWidget):
 
         utils.send_to_clipboard(cb.CF_DIB, data)
 
+    def shortcut_save_image(self):
+        if not self.focused:
+            return
+
+        print("SAVE!")
+
+        self.save_image()
+
     def save_image(self):
         options = QFileDialog.Options()
         filename, _ = QFileDialog.getSaveFileName(
@@ -455,4 +464,6 @@ class ImageCropTab(QWidget):
             # _, ext = os.path.splitext(fileName)
             img = Image.open('temp/temp_cropped_image.jpg')
             img.save(filename)
+
+        globals.keyEvent.force_key_clear()
 

@@ -1,10 +1,11 @@
 from PIL import Image
-from PyQt5.QtWidgets import QLabel, QPushButton, QFileDialog, QWidget, QGroupBox, QVBoxLayout, QFormLayout, QCheckBox, QHBoxLayout, QSpinBox, QGraphicsOpacityEffect
-from PyQt5.QtGui import QFont, QCursor, QDragEnterEvent, QDropEvent, QDragLeaveEvent, QPixmap
+from PyQt5.QtWidgets import QLabel, QPushButton, QFileDialog, QWidget, QGroupBox, QVBoxLayout, QFormLayout, QCheckBox, QHBoxLayout, QGridLayout, QSpinBox, QGraphicsOpacityEffect, QGraphicsDropShadowEffect
+from PyQt5.QtGui import QFont, QCursor, QDragEnterEvent, QDropEvent, QDragLeaveEvent, QPixmap, QColor
 from PyQt5 import QtCore, Qt
 import os
 from io import BytesIO
 import win32clipboard as cb
+import time
 
 import constants
 import utilities as utils
@@ -19,6 +20,7 @@ class ImageResizeTab(QWidget):
 
     mod_req_height = constants.FIELD_HEIGHT * 4 + 15
     req_height = constants.FIELD_HEIGHT * 4 + constants.WIDGET_HEIGHT_HD_RATIO + 15
+    req_width = constants.APP_WIDTH
 
     target_image_path = ""
     temp_path = 'temp/temp_resize_image'
@@ -31,20 +33,37 @@ class ImageResizeTab(QWidget):
     red = '#e74c3c'
     blue = '#2980b9'
 
+    COPY_TIMEOUT = 0.25
+    last_copy_2_clipboard = 0
+
+    preview_ready = False
+
     def __init__(self, parent, config):
         super(QWidget, self).__init__(parent)
 
         self.config = config
 
-        globals.keyEvent.subscribe_to_combo_event(lambda: print("RESIZE SAVE!") if self.focused else mods['ctrl'],
+        globals.keyEvent.subscribe_to_combo_event(self.shortcut_save_image,
                                                   [
                                                       mods['ctrl'],
                                                       mods['shift'],
                                                       letter['s']
                                                   ])
 
+        globals.keyEvent.subscribe_to_combo_event(self.shortcut_copy_2_clipboard,
+                                                  [
+                                                      mods['ctrl'],
+                                                      mods['shift'],
+                                                      letter['c']
+                                                  ])
+
         self.main_layout = QVBoxLayout()
         self.main_widget = QWidget(self)
+
+        self.main_widget.setStyleSheet("""
+                                       background-color:#34495e;
+                                       color: #efefef;
+                                       """)
 
         # FORM ---------------------------------------------------------
         self.image_size_group = QGroupBox()
@@ -170,8 +189,10 @@ class ImageResizeTab(QWidget):
         self.drag_n_drop_area.dragEnterEvent = self.dragEnterEvent
         self.drag_n_drop_area.dragLeaveEvent = self.dragLeaveEvent
         self.drag_n_drop_area.dropEvent = self.dropEvent
+        self.main_layout.setAlignment(self.drag_n_drop_area, Qt.Qt.AlignCenter)
 
         self.main_layout.addWidget(self.drag_n_drop_area)
+        self.main_layout.setAlignment(self.drag_n_drop_area, Qt.Qt.AlignHCenter)
 
         font = QFont('Arial', 15)
         self.drag_n_drop_label = QLabel()
@@ -187,12 +208,28 @@ class ImageResizeTab(QWidget):
         self.drag_n_drop_area.layout.addWidget(self.drag_n_drop_label)
 
         # set up the opacity effect
-        self.drag_n_drop_area.opacityEffect = QGraphicsOpacityEffect()
-        self.drag_n_drop_area.setOpacity = lambda opacity: (
-            self.drag_n_drop_area.opacityEffect.setOpacity(opacity),
-            self.drag_n_drop_area.setGraphicsEffect(self.drag_n_drop_area.opacityEffect)
-        )
+        # self.drag_n_drop_area.opacityEffect = QGraphicsOpacityEffect()
+        # self.drag_n_drop_area.setOpacity = lambda opacity: (
+        #     self.drag_n_drop_area.opacityEffect.setOpacity(opacity),
+        #     self.drag_n_drop_area.setGraphicsEffect(self.drag_n_drop_area.opacityEffect)
+        # )
         self.drag_n_drop_area.setAutoFillBackground(True)
+
+        self.dropshadow = QGraphicsDropShadowEffect()
+        self.dropshadow.setYOffset(3)
+        self.dropshadow.setXOffset(0)
+        self.dropshadow.setColor(QColor(0, 0, 0))
+        self.dropshadow.setBlurRadius(10)
+
+        self.image_preview = QWidget()
+        self.image_preview.dropshadow = QGraphicsDropShadowEffect()
+        self.image_preview.dropshadow.setYOffset(3)
+        self.image_preview.dropshadow.setXOffset(0)
+        self.image_preview.dropshadow.setColor(QColor(0, 0, 0))
+        self.image_preview.dropshadow.setBlurRadius(10)
+        self.image_preview.setGraphicsEffect(self.image_preview.dropshadow)
+        self.image_preview.hide()
+        self.drag_n_drop_area.layout.addWidget(self.image_preview)
 
         self.drag_n_drop_area.setLayout(self.drag_n_drop_area.layout)
 
@@ -217,12 +254,6 @@ class ImageResizeTab(QWidget):
         self.actions_group.size_reduction_label.setText("15% reduction")
         self.actions_group.size_reduction_label.setStyleSheet('color: {};'.format(self.green))
         self.actions_group.size_reduction_label.hide()
-        # drop_shadow = QGraphicsDropShadowEffect()
-        # drop_shadow.setBlurRadius(5)
-        # drop_shadow.setColor(QColor(0, 0, 0))
-        # drop_shadow.setXOffset(2)
-        # drop_shadow.setYOffset(2)
-        # self.actions_group.size_reduction_label.setGraphicsEffect(drop_shadow)
         self.actions_group.layout.addWidget(self.actions_group.size_reduction_label)
 
         # save button
@@ -300,6 +331,7 @@ class ImageResizeTab(QWidget):
                                                                 x1: 0, y1: 0, x2: 0, y2: 1,
                                                                 stop: 0 #fff, stop: 1 #eee); 
                                                             border: 1px solid #bbb;
+                                                            color: #111;
                                                         }
                                                         QPushButton:pressed {
                                                             background-color: qlineargradient(
@@ -325,18 +357,35 @@ class ImageResizeTab(QWidget):
         m = a0.mimeData()
         if m.hasUrls():
             a0.accept()
-            self.drag_n_drop_area.setOpacity(.5)
+
+            if self.preview_ready:
+                self.image_preview.setStyleSheet("""
+                                background-image: url({}); 
+                                background-repeat: no-repeat; 
+                                background-position: center center;
+                                border: none;
+                                border-radius: 5px;
+                            """.format("temp/temp_resize_image_alpha_preview.png"))
+
         else:
             a0.ignore()
 
     def dragLeaveEvent(self, a0: QDragLeaveEvent) -> None:
         a0.accept()
-        self.drag_n_drop_area.setOpacity(1)
+        if self.preview_ready:
+            self.image_preview.setStyleSheet("""
+                            background-image: url({}); 
+                            background-repeat: no-repeat; 
+                            background-position: center center;
+                            border: none;
+                            border-radius: 5px;
+                        """.format("temp/temp_resize_image_preview.png"))
 
     def dropEvent(self, a0: QDropEvent) -> None:
         m = a0.mimeData()
         if m.hasImage:
-            self.drag_n_drop_area.setOpacity(1)
+            self.drag_n_drop_area.setGraphicsEffect(None)
+            self.image_preview.setGraphicsEffect(self.image_preview.dropshadow)
 
             a0.setDropAction(Qt.Qt.CopyAction)
             file_path = m.urls()[0].toLocalFile()
@@ -348,21 +397,39 @@ class ImageResizeTab(QWidget):
             pixmap = QPixmap(file_path)
             pixmap = pixmap.scaled(constants.WIDGET_WIDTH, constants.WIDGET_HEIGHT_HD_RATIO, QtCore.Qt.KeepAspectRatio)
             pixmap.save("temp/temp_resize_image_preview.png", quality=100)
+
+            trans_img = Image.open('temp/temp_resize_image_preview.png')
+            alpha = Image.new("L", trans_img.size, 127)
+            trans_img.putalpha(alpha)
+            trans_img.save('temp/temp_resize_image_alpha_preview.png')
+            trans_img.close()
+            self.preview_ready = True
+
+            image_margin = 0
+            if pixmap.width() < constants.WIDGET_WIDTH:
+                dif = constants.WIDGET_WIDTH - pixmap.width()
+                image_margin = dif / 2
+
+            self.drag_n_drop_area.setFixedWidth(pixmap.width())
             self.drag_n_drop_area.setFixedHeight(pixmap.height())
 
             self.req_height = self.mod_req_height + self.drag_n_drop_area.height()
             self.resize_window(self.req_height)
 
             self.drag_n_drop_area.setStyleSheet("""
-                    background-image: url({}); 
-                    background-repeat: no-repeat; 
-                    background-position: center center; 
-                    background-color: #111;
-                    background-attachment: scroll;
-                    border: 1px solid #111;
-                    border-radius: 5px;
-                """.format("temp/temp_resize_image_preview.png"))
+                    border: none:
+                    background-color: transparent;
+                    """)
             self.drag_n_drop_label.setText("")
+            self.drag_n_drop_label.hide()
+            self.image_preview.show()
+            self.image_preview.setStyleSheet("""
+                background-image: url({}); 
+                background-repeat: no-repeat; 
+                background-position: center center;
+                border: none;
+                border-radius: 5px;
+            """.format("temp/temp_resize_image_preview.png"))
 
             self.stats_group.path_label.setText("Path: " + self.target_image_path)
             self.stats_group.file_size_label.setText("File Size: " + str(round(os.stat(self.target_image_path).st_size / constants.BYTES_PER_MEGABYTE, 2)) + "MB")
@@ -403,9 +470,6 @@ class ImageResizeTab(QWidget):
         size = os.stat(target_temp_path).st_size / constants.BYTES_PER_MEGABYTE
         starting_size = size
 
-        # close the image so that we can delete it when the app is exited
-        self.resized_image.close()
-
         print("Saving temp file at", target_temp_path)
         print("Starting size", starting_size)
 
@@ -415,11 +479,11 @@ class ImageResizeTab(QWidget):
             print("resizing", img_width, img_height, img_width - int(img_width * 0.25),
                   img_height - int(img_height * 0.25))
 
-            self.resized_image = self.resized_image.resize((img_width - int(img_width * 0.25), img_height - int(img_height * 0.25)),
-                                  Image.ANTIALIAS)
+            self.resized_image = self.resized_image.resize((img_width - int(img_width * 0.25), img_height - int(img_height * 0.25)), Image.ANTIALIAS)
             print(self.resized_image.size)
             self.resized_image.save(target_temp_path, optimize=True, format=constants.IMAGE_FORMATS[self.temp_path_ext])
             size = os.stat(target_temp_path).st_size / constants.BYTES_PER_MEGABYTE
+
             print('file size after resize', size)
 
         reduction = starting_size - size
@@ -430,17 +494,35 @@ class ImageResizeTab(QWidget):
         self.actions_group.copy_button.show()
         self.actions_group.save_button.show()
 
+        # close the image so that we can delete it when the app is exited
+        self.resized_image.close()
+
+    def shortcut_copy_2_clipboard(self):
+        if not self.focused:
+            return
+
+        current_time = time.time()
+
+        if current_time - self.last_copy_2_clipboard > self.COPY_TIMEOUT:
+            self.copy_2_clipboard()
+
     def copy_2_clipboard(self):
         print("Copying to clipboard")
 
         output = BytesIO()
-        img = Image.open(self.temp_path)
+        img = Image.open(self.temp_path + self.temp_path_ext)
         img.save(output, "BMP")
         data = output.getvalue()[14:]
         output.close()
         print(len(data) / constants.BYTES_PER_MEGABYTE)
 
         utils.send_to_clipboard(cb.CF_DIB, data)
+
+    def shortcut_save_image(self):
+        if not self.focused:
+            return
+
+        self.save_image()
 
     def save_image(self):
         options = QFileDialog.Options()
@@ -451,3 +533,5 @@ class ImageResizeTab(QWidget):
         if filename:
             # _, ext = os.path.splitext(fileName)
             self.resized_image.save(filename)
+
+        globals.keyEvent.force_key_clear()

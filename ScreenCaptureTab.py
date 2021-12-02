@@ -1,8 +1,9 @@
-from PyQt5.QtWidgets import QLabel, QPushButton, QFileDialog, QWidget, QVBoxLayout, QCheckBox, QHBoxLayout, QSpinBox, QErrorMessage
-from PyQt5.QtGui import QFont, QCursor
-from PyQt5 import QtCore
+from PyQt5.QtWidgets import QLabel, QPushButton, QFileDialog, QWidget, QVBoxLayout, QCheckBox, QHBoxLayout, QSpinBox, QErrorMessage, QGraphicsDropShadowEffect
+from PyQt5.QtGui import QFont, QCursor, QColor, QPixmap
+from PyQt5 import QtCore, Qt
 import mss
-from PIL import Image
+from PIL import Image, ImageQt
+from PIL.ImageQt import ImageQt
 import os
 from filelock import FileLock
 
@@ -15,6 +16,9 @@ import globals
 class ScreenCaptureTab(QWidget):
     main_layout = None
     main_widget = None
+
+    req_height = 505 + constants.FIELD_HEIGHT + 50
+    req_width = constants.APP_WIDTH
 
     focused = False
 
@@ -40,8 +44,11 @@ class ScreenCaptureTab(QWidget):
         self.g_instructions = QWidget(self)
         self.g_instructions.setFixedWidth(constants.WIDGET_WIDTH)
         self.g_instructions.setFixedHeight(100)
-        self.g_instructions.setStyleSheet('border: 1px solid #000;'
-                                          'border-radius: 2px')
+        self.g_instructions.setStyleSheet("""
+                                          border: 1px solid #aaa;
+                                          border-radius: 2px;
+                                          color: #ededed;
+                                          """)
 
         g_instructions_layout = QVBoxLayout()
 
@@ -63,7 +70,6 @@ class ScreenCaptureTab(QWidget):
         self.g_instructions_preview.setStyleSheet('border: none;')
         g_instructions_layout.addWidget(self.g_instructions_preview)
 
-        g_instructions_layout.addStretch()
         self.g_instructions.setLayout(g_instructions_layout)
 
         # Settings -----------------------------------------------------------------------------------------------------
@@ -80,7 +86,7 @@ class ScreenCaptureTab(QWidget):
         self.g_settings_set_hotkey_label = QLabel('Capture Hotkey', self)
         self.g_settings_set_hotkey_label.setFixedHeight(constants.FIELD_HEIGHT)
         self.g_settings_set_hotkey_label.setFont(QFont('Arial', 10))
-        self.g_settings_set_hotkey_label.setStyleSheet("border: none;")
+        self.g_settings_set_hotkey_label.setStyleSheet("border: none; color:#efefef;")
         g_settings_layout.addWidget(self.g_settings_set_hotkey_label)
 
         self.g_settings_set_hotkey = QWidget(self)
@@ -89,8 +95,9 @@ class ScreenCaptureTab(QWidget):
         self.g_settings_set_hotkey.setStyleSheet("""
                                                 QLabel{
                                                     padding-left: 5px;
-                                                    border: 1px solid #bbb;
+                                                    border: 1px solid #aaa;
                                                     border-radius: 2px;
+                                                    color: #ededed;
                                                 }
                                                 """)
 
@@ -111,16 +118,16 @@ class ScreenCaptureTab(QWidget):
                                                             border-radius: 2px;
                                                             background-color: qlineargradient(
                                                                 x1: 0, y1: 0, x2: 0, y2: 1,
-                                                                stop: 0 #fff, stop: 1 #eee);
+                                                                stop: 0 #fff, stop: 1 #aaa);
                                                             border: 1px solid #bbb;
                                                         }
                                                         QPushButton:pressed {
                                                             background-color: qlineargradient(
                                                                 x1: 0, y1: 0, x2: 0, y2: 1,
-                                                                stop: 0 #eee, stop: 1 #fff); 
+                                                                stop: 0 #ccc, stop: 1 #ccc); 
                                                         }
                                                         QPushButton:hover {
-                                                            border: 1px solid #666;
+                                                            border: 1px solid #111;
                                                         }
                                                         """)
         self.g_setting_hotkey_change_button.setCursor(QCursor(QtCore.Qt.PointingHandCursor))
@@ -134,7 +141,7 @@ class ScreenCaptureTab(QWidget):
         self.g_settings_save_file_cb = QCheckBox('Save Screenshot', self)
         self.g_settings_save_file_cb.setFixedHeight(constants.FIELD_HEIGHT)
         self.g_settings_save_file_cb.setFont(QFont('Arial', 10))
-        self.g_settings_save_file_cb.setStyleSheet("border: none;")
+        self.g_settings_save_file_cb.setStyleSheet("border: none; color: #efefef;")
         self.g_settings_save_file_cb.stateChanged.connect(self.cb_save_file_state_changed)
         self.g_settings_save_file_cb.setFocusPolicy(QtCore.Qt.NoFocus)
         # Checked after we create the path widget
@@ -143,17 +150,6 @@ class ScreenCaptureTab(QWidget):
             self.init_save_path()
 
         # SS Path ------------------------------------------------------------------------------------------------------
-        # self.g_settings_save_file_path = QLabel("Path: {}".format(CONFIG_DICT['ss_path']), self)
-        # self.g_settings_save_file_path.setFixedHeight(FIELD_HEIGHT)
-        # # self.g_settings_save_file_path.setFixedWidth(WIDGET_WIDTH)
-        # self.g_settings_save_file_path.setStyleSheet('QLabel{ padding-left: 5px;'
-        #                                              'border: 1px solid #bbb; '
-        #                                              'border-radius: 2px;'
-        #                                              'cursor: pointer;} '
-        #                                              'QLabel:hover{ border: 1px solid #666; }')
-        # self.g_settings_save_file_path.setCursor(QCursor(QtCore.Qt.PointingHandCursor))
-        # self.g_settings_save_file_path.mouseReleaseEvent = lambda event: self.get_ss_save_path()
-        # self.g_settings_save_file_path.setFocusPolicy(QtCore.Qt.NoFocus)
 
         self.g_settings_set_path = QWidget(self)
         self.g_settings_set_path.setFixedHeight(30)
@@ -161,8 +157,9 @@ class ScreenCaptureTab(QWidget):
         self.g_settings_set_path.setStyleSheet("""
                                                QLabel {
                                                     padding-left: 5px;
-                                                    border: 1px solid #bbb;
+                                                    border: 1px solid #aaa;
                                                     border-radius: 2px;
+                                                    color: #efefef;
                                                }
                                                QLabel:hover {
                                                     border:1px solid #000;
@@ -192,13 +189,13 @@ class ScreenCaptureTab(QWidget):
                                                         background-position: center center;
                                                         background-color: qlineargradient(
                                                             x1: 0, y1: 0, x2: 0, y2: 1,
-                                                            stop: 0 #fff, stop: 1 #eee);
+                                                            stop: 0 #fff, stop: 1 #aaa);
                                                         border: 1px solid #bbb;
                                                     }
                                                     QPushButton:pressed {
                                                         background-color: qlineargradient(
                                                             x1: 0, y1: 0, x2: 0, y2: 1,
-                                                            stop: 0 #eee, stop: 1 #fff);
+                                                            stop: 0 #ccc, stop: 1 #ccc);
                                                     }
                                                     QPushButton:hover {
                                                         border: 1px solid #666;
@@ -216,7 +213,7 @@ class ScreenCaptureTab(QWidget):
         self.g_settings_optimize_ss = QCheckBox('Optimize Saved Image', self)
         self.g_settings_optimize_ss.setFixedHeight(constants.FIELD_HEIGHT)
         self.g_settings_optimize_ss.setFont(QFont('Arial', 10))
-        self.g_settings_optimize_ss.setStyleSheet('border: none;')
+        self.g_settings_optimize_ss.setStyleSheet('border: none; color: #efefef;')
         self.g_settings_optimize_ss.setToolTip('Extra pass to lower file size. Increases time to save file.')
         self.g_settings_optimize_ss.stateChanged.connect(self.cb_optimize_screenshot)
         self.g_settings_optimize_ss.setChecked(self.config['ss_optimize'])
@@ -230,7 +227,7 @@ class ScreenCaptureTab(QWidget):
         self.g_settings_cpy2_clip = QCheckBox('Copy to Clipboard', self)
         self.g_settings_cpy2_clip.setFixedHeight(constants.FIELD_HEIGHT)
         self.g_settings_cpy2_clip.setFont(QFont('Arial', 10))
-        self.g_settings_cpy2_clip.setStyleSheet('border: none;')
+        self.g_settings_cpy2_clip.setStyleSheet('border: none; color: #efefef;')
         self.g_settings_cpy2_clip.stateChanged.connect(self.cb_cpy2_clip_state_changed)
         # We need to set checked after we make the size limit elements
         # self.g_settings_cpy2_clip.setChecked(CONFIG_DICT['copy_2_cb'])
@@ -241,7 +238,7 @@ class ScreenCaptureTab(QWidget):
         self.g_settings_limit_clipboard_size = QCheckBox('Limit Clipboard Size', self)
         self.g_settings_limit_clipboard_size.setFixedHeight(constants.FIELD_HEIGHT)
         self.g_settings_limit_clipboard_size.setFont(QFont('Arial', 10))
-        self.g_settings_limit_clipboard_size.setStyleSheet('border: none;')
+        self.g_settings_limit_clipboard_size.setStyleSheet('border: none; color: #efefef;')
         self.g_settings_limit_clipboard_size.setToolTip(
             'Set the size limit of clipboard')
         self.g_settings_limit_clipboard_size.stateChanged.connect(self.cb_limit_clipboard_size_state_changed)
@@ -270,7 +267,7 @@ class ScreenCaptureTab(QWidget):
         self.g_settings_limit_clipboard_size.setChecked(self.config['ss_limit_size'])
 
         size_layout.addWidget(self.g_settings_size_val)
-        size_layout.addStretch()
+        size_layout.setAlignment(self.g_settings_size_val, Qt.Qt.AlignLeft)
         self.g_settings_set_size_limit.setLayout(size_layout)
 
         g_settings_layout.addWidget(self.g_settings_set_size_limit)
@@ -282,7 +279,7 @@ class ScreenCaptureTab(QWidget):
         self.g_settings_show_toast_on_monitor_change = QCheckBox('Toast on Monitor Change', self)
         self.g_settings_show_toast_on_monitor_change.setFixedHeight(constants.FIELD_HEIGHT)
         self.g_settings_show_toast_on_monitor_change.setFont(QFont('Arial', 10))
-        self.g_settings_show_toast_on_monitor_change.setStyleSheet('border: none;')
+        self.g_settings_show_toast_on_monitor_change.setStyleSheet('border: none; color: #efefef;')
         self.g_settings_show_toast_on_monitor_change.setToolTip(
             'Show notification when the active monitor has been changed')
         self.g_settings_show_toast_on_monitor_change.stateChanged.connect(self.cb_show_toast_on_monitor_state_changed)
@@ -294,46 +291,54 @@ class ScreenCaptureTab(QWidget):
         self.g_settings_show_toast_on_capture = QCheckBox('Toast on Capture', self)
         self.g_settings_show_toast_on_capture.setFixedHeight(constants.FIELD_HEIGHT)
         self.g_settings_show_toast_on_capture.setFont(QFont('Arial', 10))
-        self.g_settings_show_toast_on_capture.setStyleSheet('border: none;')
+        self.g_settings_show_toast_on_capture.setStyleSheet('border: none; color: #efefef;')
         self.g_settings_show_toast_on_capture.setToolTip('Show notification when screenshot has been captured')
         self.g_settings_show_toast_on_capture.stateChanged.connect(self.cb_show_toast_on_capture_state_changed)
         self.g_settings_show_toast_on_capture.setChecked(self.config['show_toast_on_capture'])
         self.g_settings_show_toast_on_capture.setFocusPolicy(QtCore.Qt.NoFocus)
         g_settings_layout.addWidget(self.g_settings_show_toast_on_capture)
 
-        g_settings_layout.addStretch()
         self.g_settings.setLayout(g_settings_layout)
 
         # Preview ------------------------------------------------------------------------------------------------------
         preview_layout = QVBoxLayout()
         preview_layout.setContentsMargins(0, 0, 0, 0)
-        self.g_preview = QWidget(self)
-        self.g_preview.setFixedHeight(350)
-        self.g_preview.setFixedWidth(500)
-        self.g_preview.setStyleSheet('border-radius: 3px')
+        self.g_preview = QWidget()
+        self.g_preview.setFixedHeight(constants.FIELD_HEIGHT + 50)
+        self.g_preview.setFixedWidth(constants.WIDGET_WIDTH)
+        self.g_preview.setStyleSheet('border-radius: 3px;')
+        self.g_preview.setAutoFillBackground(True)
 
         self.preview_label = QLabel("Preview Monitors")
+        self.preview_label.setFixedWidth(constants.WIDGET_WIDTH)
+        self.preview_label.setFixedHeight(constants.FIELD_HEIGHT)
+        self.preview_label.setStyleSheet("color: #efefef;")
         self.preview_label.setFont(instructions_title_fontt)
         preview_layout.addWidget(self.preview_label)
+        preview_layout.setAlignment(self.preview_label, Qt.Qt.AlignTop)
 
         monitor_layout = QHBoxLayout()
         monitor_layout.setContentsMargins(0, 0, 0, 0)
-        self.g_monitors = QWidget(self)
-        self.g_monitors.setMinimumHeight(20)
-        self.g_monitors.setMinimumWidth(20)
+        self.g_monitors = QWidget()
+        self.g_monitors.setMinimumWidth(50)
+        self.g_monitors.setFixedHeight(50)
 
         self.gen_monitor_list()
 
         # Add monitor buttons ------------------------------------------------------------------------------------------
         for i in range(0, len(self.monitor_buttons)):
             monitor_layout.addWidget(self.monitor_buttons[i])
+            monitor_layout.setAlignment(self.monitor_buttons[i], Qt.Qt.AlignLeft)
         monitor_layout.addStretch()
 
         self.g_monitors.setLayout(monitor_layout)
         preview_layout.addWidget(self.g_monitors)
+        preview_layout.setAlignment(self.g_monitors, Qt.Qt.AlignTop)
+        preview_layout.setContentsMargins(0, 0, 0, 0)
 
         # image --------------------------------------------------------------------------------------------------------
-        self.image_preview = QWidget(self)
+        self.image_preview = QWidget(self.g_preview)
+        self.image_preview.setContentsMargins(0, 0, 0, 0)
         self.image_preview.setFixedWidth(constants.WIDGET_WIDTH)
         self.image_preview.setFixedHeight(constants.WIDGET_HEIGHT_HD_RATIO)
         self.image_preview.setStyleSheet("""
@@ -346,8 +351,19 @@ class ScreenCaptureTab(QWidget):
                                         background-position: center center;
                                         border: 1px solid #bbb;
                                         """.format(constants.DEFAULT_PREVIEW_PATH))
+
+        self.image_preview.dropshadow = QGraphicsDropShadowEffect()
+        self.image_preview.dropshadow.setYOffset(3)
+        self.image_preview.dropshadow.setXOffset(0)
+        self.image_preview.dropshadow.setColor(QColor(0, 0, 0))
+        self.image_preview.dropshadow.setBlurRadius(10)
+        self.image_preview.setGraphicsEffect(self.image_preview.dropshadow)
+
         self.image_preview.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.image_preview.hide()
         preview_layout.addWidget(self.image_preview)
+        preview_layout.addStretch()
+        preview_layout.setAlignment(self.image_preview, Qt.Qt.AlignHCenter | Qt.Qt.AlignTop)
 
         self.g_preview.setLayout(preview_layout)
 
@@ -355,7 +371,6 @@ class ScreenCaptureTab(QWidget):
         self.main_layout.addWidget(self.g_instructions)
         self.main_layout.addWidget(self.g_settings)
         self.main_layout.addWidget(self.g_preview)
-        self.main_layout.addStretch()
         self.main_widget.setLayout(self.main_layout)
 
     def get_ss_save_path(self):
@@ -378,10 +393,10 @@ class ScreenCaptureTab(QWidget):
                 button.setFixedHeight(40)
                 button.setStyleSheet("""
                                     QPushButton {
-                                        background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,stop: 0 #fff, stop: 1 #eee); border: 1px solid #bbb;
+                                        background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,stop: 0 #fff, stop: 1 #aaa); border: 1px solid #bbb;
                                     }
                                     QPushButton:pressed {
-                                        background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,stop: 0 #eee, stop: 1 #fff);
+                                        background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,stop: 0 #ccc, stop: 1 #ccc);
                                     }
                                     QPushButton:hover {
                                         border: 1px solid #666;
@@ -398,16 +413,30 @@ class ScreenCaptureTab(QWidget):
             scr_img = scr.grab(scr.monitors[mid])
 
             img = Image.frombytes("RGB", scr_img.size, scr_img.bgra, "raw", "BGRX")
-            img.thumbnail((constants.THUMBNAIL_WIDTH, constants.THUMBNAIL_HEIGHT))
-            img.save(constants.TEMP_IMAGE_PATH)
+            qimg = ImageQt(img)
+            pixmap = QPixmap.fromImage(qimg)
+            pixmap = pixmap.scaled(constants.WIDGET_WIDTH - 15, constants.WIDGET_HEIGHT_HD_RATIO, QtCore.Qt.KeepAspectRatio)
+            pixmap.save(constants.TEMP_IMAGE_PATH, quality=100)
 
-            self.image_preview.setStyleSheet("""
-                                            background-color:#eee; 
+            # img.thumbnail((constants.WIDGET_WIDTH, constants.WIDGET_HEIGHT_HD_RATIO))
+            # img.save(constants.TEMP_IMAGE_PATH)
+            w, h = pixmap.width(), pixmap.height()
+
+            self.image_preview.setStyleSheet(""" 
                                             background-image: url({});
                                             background-repeat: no-repeat;
                                             background-position: center center; 
-                                            border: 1px solid #bbb;
+                                            border: 1px solid #111;
                                             """.format(constants.TEMP_IMAGE_PATH))
+
+            self.image_preview.setFixedWidth(w)
+            self.image_preview.setFixedHeight(h)
+            # self.image_preview.adjustSize()
+
+            self.g_preview.setFixedHeight(h + constants.FIELD_HEIGHT + 75)
+            self.req_height = 505 + h + constants.FIELD_HEIGHT + 75
+            self.resize_window(self.req_height)
+            self.image_preview.show()
 
     def cb_save_file_state_changed(self, int):
         self.g_settings_set_path.setEnabled(self.g_settings_save_file_cb.isChecked())

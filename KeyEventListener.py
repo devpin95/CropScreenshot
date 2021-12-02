@@ -38,7 +38,10 @@ class KeyEventListener:
             self.raise_key_combo_event()
 
     def raise_explicit_release_event(self, key, params={}):
-        self.current_keys.remove(key)
+        try:
+            self.current_keys.remove(key)
+        except ValueError:
+            pass
 
         for listener in self.explicit_key_release_listeners:
             if listener['filter'] is not None:
@@ -51,4 +54,7 @@ class KeyEventListener:
         for listener in self.key_combo_listeners:
             if set(listener['filter']) == set(self.current_keys):
                 listener['callback']()
+
+    def force_key_clear(self):
+        self.current_keys = []
 
