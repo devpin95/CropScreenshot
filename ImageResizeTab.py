@@ -18,9 +18,10 @@ class ImageResizeTab(QWidget):
 
     focused = False
 
-    mod_req_height = constants.FIELD_HEIGHT * 4 + 15
-    req_height = constants.FIELD_HEIGHT * 4 + constants.WIDGET_HEIGHT_HD_RATIO + 15
+    mod_req_height = constants.FIELD_HEIGHT * 4 + constants.APP_BOTTOM_PADDING
+    req_height = constants.FIELD_HEIGHT * 4 + constants.WIDGET_HEIGHT_HD_RATIO + constants.APP_BOTTOM_PADDING
     req_width = constants.APP_WIDTH
+    height_correction = 0
 
     target_image_path = ""
     temp_path = 'temp/temp_resize_image'

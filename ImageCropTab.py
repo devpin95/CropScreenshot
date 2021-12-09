@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QGraphicsOpacityEffect, QPushButton, QHBoxLayout, QFileDialog, QGraphicsDropShadowEffect
-from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QDragLeaveEvent, QMouseEvent, QPixmap, QCursor, QClipboard, QColor
+from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QDragLeaveEvent, QMouseEvent, QPixmap, QCursor, QColor
 from PyQt5 import QtCore, Qt
 from PIL import Image
 from io import BytesIO
@@ -19,7 +19,8 @@ class ImageCropTab(QWidget):
     focused = False
 
     req_width = constants.APP_WIDTH
-    req_height = constants.WIDGET_HEIGHT_HD_RATIO + 15
+    req_height = constants.WIDGET_HEIGHT_HD_RATIO + constants.APP_BOTTOM_PADDING
+    height_correction = 0
 
     current_image_path = ''
     dragging = False
@@ -59,6 +60,7 @@ class ImageCropTab(QWidget):
 
         self.main_layout = QVBoxLayout()
         self.main_widget = QWidget(self)
+
 
         self.drop_area = QLabel()
         self.drop_area.setFixedWidth(constants.WIDGET_WIDTH)
@@ -383,7 +385,7 @@ class ImageCropTab(QWidget):
         self.maxx = target_width
         self.maxy = target_height
         self.req_width = target_width + 40
-        self.req_height = target_height + 15
+        self.req_height = target_height + constants.APP_BOTTOM_PADDING
 
         if show_options:
             self.req_height += constants.FIELD_HEIGHT + 15

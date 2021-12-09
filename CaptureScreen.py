@@ -17,6 +17,7 @@ CONFIG_LOCK_FILE = 'config.lock'
 CONFIG_FILE = 'config.json'
 CONFIG_DICT = {}
 FLOCK = FileLock(CONFIG_LOCK_FILE)
+BYTES_PER_MEGABYTE = 1048576
 
 
 def start_listening_for_hotkeys():
@@ -83,7 +84,7 @@ def on_trigger():
         if CONFIG_DICT['copy_2_cb']:
             img.save(temp_path, optimize=CONFIG_DICT['ss_optimize'])
 
-            size = os.stat(temp_path).st_size / 1000000
+            size = os.stat(temp_path).st_size / BYTES_PER_MEGABYTE
 
             if CONFIG_DICT['ss_limit_size']:
                 while size > CONFIG_DICT['ss_mb_size_limit']:
@@ -94,7 +95,7 @@ def on_trigger():
                     temp_img = img.resize((img_width - int(img_width * 0.25), img_height - int(img_height * 0.25)), Image.ANTIALIAS)
                     print(temp_img.size)
                     temp_img.save(temp_path, optimize=CONFIG_DICT['ss_optimize'])
-                    size = os.stat(temp_path).st_size / 1000000
+                    size = os.stat(temp_path).st_size / BYTES_PER_MEGABYTE
                     print('file size after resize', size)
 
             cb_img = Image.open(temp_path)
@@ -104,7 +105,10 @@ def on_trigger():
             data = output.getvalue()[14:]
             output.close()
 
-            os.remove(temp_path)
+            try:
+                os.remove(temp_path)
+            except:
+                print("something went wrong removing temp image")
 
             send_to_clipboard(cb.CF_DIB, data)
             toast_str = 'Copied to Clipboard\n' + toast_str

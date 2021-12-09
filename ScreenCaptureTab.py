@@ -17,8 +17,9 @@ class ScreenCaptureTab(QWidget):
     main_layout = None
     main_widget = None
 
-    req_height = 505 + constants.FIELD_HEIGHT + 50
+    req_height = 505 + constants.FIELD_HEIGHT + constants.APP_BOTTOM_PADDING
     req_width = constants.APP_WIDTH
+    height_correction = 0
 
     focused = False
 
@@ -433,8 +434,8 @@ class ScreenCaptureTab(QWidget):
             self.image_preview.setFixedHeight(h)
             # self.image_preview.adjustSize()
 
-            self.g_preview.setFixedHeight(h + constants.FIELD_HEIGHT + 75)
-            self.req_height = 505 + h + constants.FIELD_HEIGHT + 75
+            self.g_preview.setFixedHeight(h + constants.FIELD_HEIGHT + constants.APP_BOTTOM_PADDING + 15)
+            self.req_height = 505 + h + constants.FIELD_HEIGHT + constants.APP_BOTTOM_PADDING + 15
             self.resize_window(self.req_height)
             self.image_preview.show()
 
